@@ -1,10 +1,10 @@
 # Data-Cleaning-and-Preprocessing
 Clean and prepare a raw dataset
-Sure! Here's a **step-by-step description** of **Data Cleaning and Preprocessing** in clear bullet points:
+
 
 ---
 
-## 🧹 **Data Cleaning and Preprocessing Steps (with Descriptions)**
+##  **Data Cleaning and Preprocessing Steps (with Descriptions)**
 
 ---
 
@@ -76,5 +76,4 @@ Sure! Here's a **step-by-step description** of **Data Cleaning and Preprocessing
 
 ---
 
-Let me know if you want these steps formatted into a PDF, `.ipynb` notebook, or Markdown document for your project or report.
 
