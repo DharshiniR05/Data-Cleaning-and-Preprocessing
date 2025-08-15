@@ -1,0 +1,17 @@
+body {
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #6a11cb, #2575fc);
+  min-height: 100vh; margin:0; display:flex; justify-content:center;
+  align-items:center; color:white; padding:15px;
+}
+div {
+  width: 100%; max-width: 400px;
+}
+textarea, select, button {
+  width: 100%; padding: 10px; margin: 5px 0;
+  font-size: 16px; border-radius: 5px; border: none;
+}
+button {
+  background: #ff9800; color: white; font-weight: bold; cursor: pointer;
+}
+button:hover { background: #e68900; }
