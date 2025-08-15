@@ -1,0 +1,226 @@
+// script.js - Autocorrect logic
+
+// --- Small dictionary of common words (expand this array to improve corrections) ---
+const DICT = (function(){
+  const words = `
+the be to of and a in that have I it for not on with he as you do at this but his by from
+we say her she or an will my one all would there their what so up out if about who get which go me
+when make can like time no just him know take people into year your good some could them see other
+than then now look only come its over think also back after use two how our work first well way even
+new want because any these give day most us is are was were been being am
+`.trim().split(/\s+/);
+  // add common verbs/adjectives/nouns to help
+  const more = ["is","are","was","were","been","being","have","has","had","do","does","did","make","made","take","walk","run","read","write","play","use","used","will","would","should","can","could","may","might","must","house","car","phone","computer","school","student","project","code","input","output","help","example","please","thank","thanks","hello","world","app","tool","autocorrect","correct","sentence","word","words","text","language","english","mobile","responsive","button","click","apply"];
+  return Array.from(new Set(words.concat(more))).map(w => w.toLowerCase());
+})();
+
+// --- Utility: Levenshtein distance ---
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  const la = a.length, lb = b.length;
+  if (la === 0) return lb;
+  if (lb === 0) return la;
+  const dp = Array.from({length: la + 1}, (_, i) => Array(lb + 1).fill(0));
+  for (let i = 0; i <= la; i++) dp[i][0] = i;
+  for (let j = 0; j <= lb; j++) dp[0][j] = j;
+  for (let i = 1; i <= la; i++) {
+    const ai = a.charAt(i - 1);
+    for (let j = 1; j <= lb; j++) {
+      const cost = ai === b.charAt(j - 1) ? 0 : 1;
+      dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + cost);
+      // transposition check (Damerau-ish)
+      if (i>1 && j>1 && ai === b.charAt(j-2) && a.charAt(i-2) === b.charAt(j-1)) {
+        dp[i][j] = Math.min(dp[i][j], dp[i-2][j-2] + 1);
+      }
+    }
+  }
+  return dp[la][lb];
+}
+
+// --- Tokenize but preserve punctuation ---
+function tokenize(text) {
+  // split into words and punctuation (keeps spaces as separators)
+  // tokens: words with apostrophes, numbers, punctuation
+  const re = /[A-Za-z0-9']+|[^\sA-Za-z0-9']/g;
+  return text.match(re) || [];
+}
+
+// --- Restore capitalization: if original starts uppercase, capitalize suggestion ---
+function matchCapitalization(orig, suggestion) {
+  if (!orig) return suggestion;
+  if (orig === orig.toUpperCase()) return suggestion.toUpperCase();
+  if (orig[0] === orig[0].toUpperCase()) {
+    return suggestion.charAt(0).toUpperCase() + suggestion.slice(1);
+  }
+  return suggestion;
+}
+
+// --- Find best suggestion for a single word using DICT ---
+function suggestForWord(word, maxDistance) {
+  const lw = word.toLowerCase();
+  if (DICT.includes(lw)) return null; // already correct
+  // search dictionary for minimal distance
+  let best = null;
+  let bestDist = Infinity;
+  for (const cand of DICT) {
+    // quick length check to speed up: if length difference > maxDistance + 1 skip
+    if (Math.abs(cand.length - lw.length) > Math.max(2, maxDistance + 1)) continue;
+    const d = levenshtein(lw, cand);
+    if (d < bestDist) { bestDist = d; best = cand; }
+    if (bestDist === 0) break;
+  }
+  if (bestDist <= maxDistance) return {candidate: best, distance: bestDist};
+  return null;
+}
+
+// --- Rebuild text from tokens, applying optional replacements map ---
+function rebuild(tokens, replacements = {}) {
+  return tokens.map((t,i) => {
+    if (replacements[i]) return replacements[i];
+    return t;
+  }).join('');
+}
+
+// --- DOM elements ---
+const inputText = document.getElementById('inputText');
+const checkBtn = document.getElementById('checkBtn');
+const suggestionsDiv = document.getElementById('suggestions');
+const previewDiv = document.getElementById('preview');
+const applyAllBtn = document.getElementById('applyAllBtn');
+const clearBtn = document.getElementById('clearBtn');
+const thresholdSelect = document.getElementById('threshold');
+
+// Keep tokens indices consistent by joining tokens with empty string when rebuilding.
+// But tokenization above removes spaces; to preserve spaces we will reconstruct with regex that includes spaces as tokens.
+function tokenizePreserveSpaces(text) {
+  const re = /[A-Za-z0-9']+|[^\S\r\n]+|[^\sA-Za-z0-9']/g; // includes whitespace tokens
+  return text.match(re) || [];
+}
+
+// --- Main check function ---
+function checkText() {
+  const raw = inputText.value || '';
+  const tokens = tokenizePreserveSpaces(raw);
+  const maxDistance = parseInt(thresholdSelect.value, 10);
+
+  // find suggestions
+  const suggestions = [];
+  const replacements = {}; // index -> replacement string
+
+  tokens.forEach((tok, idx) => {
+    // only check tokens that contain letters (ignore whitespace and punctuation-only)
+    if (!/[A-Za-z]/.test(tok)) return;
+    const plain = tok.replace(/(^[^A-Za-z']+)|([^A-Za-z']+$)/g, ''); // trim non-letter punctuation from ends
+    if (!plain) return;
+    const leading = tok.match(/^[^A-Za-z']+/) ? tok.match(/^[^A-Za-z']+/)[0] : '';
+    const trailing = tok.match(/[^A-Za-z']+$/) ? tok.match(/[^A-Za-z']+$/)[0] : '';
+    const core = plain;
+    const suggestion = suggestForWord(core, maxDistance);
+    if (suggestion) {
+      const replacement = matchCapitalization(core, suggestion.candidate);
+      // rebuild token with leading/trailing punctuation preserved
+      const newTok = leading + replacement + trailing;
+      suggestions.push({
+        index: idx,
+        original: tok,
+        plain,
+        replacement: newTok,
+        candidate: suggestion.candidate,
+        distance: suggestion.distance
+      });
+      // also set initial preview replacement (but user can opt to apply individually)
+      replacements[idx] = newTok;
+    }
+  });
+
+  renderSuggestions(tokens, suggestions, replacements);
+}
+
+// --- Render suggestions list and preview ---
+function renderSuggestions(tokens, suggestions, replacements) {
+  suggestionsDiv.innerHTML = '';
+  if (suggestions.length === 0) {
+    suggestionsDiv.textContent = 'No suggestions found — your text looks fine given the current sensitivity.';
+  } else {
+    // create suggestion items
+    suggestions.forEach((s) => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      const left = document.createElement('div');
+      left.innerHTML = `<strong>${escapeHtml(s.plain)}</strong><div style="color:var(--muted);font-size:13px">suggest: ${escapeHtml(s.candidate)} (dist ${s.distance})</div>`;
+      item.appendChild(left);
+
+      const preview = document.createElement('div');
+      preview.style.marginLeft = '12px';
+      preview.textContent = s.replacement;
+      preview.style.opacity = 0.9;
+      item.appendChild(preview);
+
+      const applyBtn = document.createElement('button');
+      applyBtn.textContent = 'Apply';
+      applyBtn.onclick = () => {
+        // apply replacement to tokens and re-render preview
+        replacements[s.index] = s.replacement;
+        previewDiv.textContent = rebuild(tokens, replacements);
+        // remove this suggestion from the list (mark applied)
+        item.style.opacity = 0.45;
+        applyBtn.disabled = true;
+      };
+      item.appendChild(applyBtn);
+
+      suggestionsDiv.appendChild(item);
+    });
+
+    // initial preview (apply all suggested replacements for preview only)
+    previewDiv.textContent = rebuild(tokens, replacements);
+  }
+}
+
+// Escape simple html for display
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
+}
+
+// Apply all suggestions permanently to the textarea
+function applyAll() {
+  const raw = inputText.value || '';
+  const tokens = tokenizePreserveSpaces(raw);
+  const maxDistance = parseInt(thresholdSelect.value, 10);
+  const replacements = {};
+  tokens.forEach((tok, idx) => {
+    if (!/[A-Za-z]/.test(tok)) return;
+    const plain = tok.replace(/(^[^A-Za-z']+)|([^A-Za-z']+$)/g, '');
+    if (!plain) return;
+    const suggestion = suggestForWord(plain, maxDistance);
+    if (suggestion) {
+      const replacement = matchCapitalization(plain, suggestion.candidate);
+      const leading = tok.match(/^[^A-Za-z']+/) ? tok.match(/^[^A-Za-z']+/)[0] : '';
+      const trailing = tok.match(/[^A-Za-z']+$/) ? tok.match(/[^A-Za-z']+$/)[0] : '';
+      replacements[idx] = leading + replacement + trailing;
+    }
+  });
+  const newText = rebuild(tokens, replacements);
+  inputText.value = newText;
+  // re-check to refresh suggestions & preview
+  checkText();
+}
+
+// Clear input
+function clearAll() {
+  inputText.value = '';
+  suggestionsDiv.textContent = 'No suggestions yet — press Check.';
+  previewDiv.textContent = 'Corrected text will appear here.';
+}
+
+// Event listeners
+checkBtn.addEventListener('click', checkText);
+applyAllBtn.addEventListener('click', applyAll);
+clearBtn.addEventListener('click', clearAll);
+
+// Allow pressing Ctrl+Enter or Cmd+Enter to run check
+inputText.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    checkText();
+  }
+});

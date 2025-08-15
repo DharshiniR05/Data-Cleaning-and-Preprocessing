@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Autocorrect Tool</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Autocorrect Tool</h1>
+      <p class="subtitle">Paste a sentence or paragraph and get corrections. Mobile friendly.</p>
+    </header>
+
+    <section class="editor">
+      <label for="inputText">Enter text to autocorrect</label>
+      <textarea id="inputText" rows="6" placeholder="Type or paste text here..."></textarea>
+
+      <div class="controls">
+        <div class="left">
+          <label for="threshold">Sensitivity</label>
+          <select id="threshold" title="Matching sensitivity">
+            <option value="1">Strict (distance ≤1)</option>
+            <option value="2" selected>Balanced (distance ≤2)</option>
+            <option value="3">Lenient (distance ≤3)</option>
+          </select>
+        </div>
+
+        <div class="right">
+          <button id="checkBtn" class="btn primary">Check</button>
+          <button id="applyAllBtn" class="btn">Auto-correct All</button>
+          <button id="clearBtn" class="btn ghost">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="results">
+      <h2>Suggestions</h2>
+      <div id="suggestions" class="suggestions">No suggestions yet — press <strong>Check</strong>.</div>
+    </section>
+
+    <section class="preview">
+      <h2>Preview</h2>
+      <div id="preview" class="preview-box">Corrected text will appear here.</div>
+    </section>
+
+    <footer>
+      <small>Built with plain HTML/CSS/JS • Edit the dictionary in script.js to expand vocabulary.</small>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
